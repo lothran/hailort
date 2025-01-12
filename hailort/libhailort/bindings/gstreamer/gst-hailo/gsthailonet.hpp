@@ -90,7 +90,6 @@ typedef struct _GstHailoNet {
     GstElement element;
     GstPad *sinkpad;
     GstPad *srcpad;
-
     HailoNetImpl *impl;
 } GstHailoNet;
 
@@ -137,6 +136,7 @@ public:
     std::mutex input_queue_mutex;
     std::mutex thread_queue_mutex;
     std::condition_variable thread_cv;
+    bool failed_dma;
 };
 
 typedef struct _GstHailoNetClass {
