@@ -1477,6 +1477,8 @@ gst_hailonet_construct_pix_buffer(GstHailoNet *self, GstBuffer *buffer) {
   CHECK_AS_EXPECTED(result, HAILO_INTERNAL_FAILURE,
                     "gst_video_frame_map failed!");
 
+  GST_ERROR("HELLO");
+
   hailo_pix_buffer_t pix_buffer = {};
   pix_buffer.index = 0;
   pix_buffer.number_of_planes = GST_VIDEO_INFO_N_PLANES(&frame.info);
@@ -1488,19 +1490,21 @@ gst_hailonet_construct_pix_buffer(GstHailoNet *self, GstBuffer *buffer) {
        plane_index++) {
     int plane_size = get_frame_width(&frame, plane_index) *
                      GST_VIDEO_INFO_COMP_HEIGHT(&frame.info, plane_index);
+
+    GST_ERROR("plane size %d", plane_size);
     guint mem_idx = 0;
     guint length = 0;
     gsize mem_skip = 0;
 
-    assert(gst_buffer_find_memory(buffer, finfo->offset[plane_size], plane_size,
-                                  &mem_idx, &length, &mem_skip));
-    std::cout << "mem_skip " << mem_skip << " length " << length << " idx"
-              << mem_idx << "\n";
+    gst_buffer_find_memory(buffer, finfo->offset[plane_size], plane_size,
+                           &mem_idx, &length, &mem_skip);
     auto mem = gst_buffer_peek_memory(buffer, mem_idx);
-    std::cout << "is dma " << gst_is_dmabuf_memory(mem) << "\n";
+
+    GST_ERROR("found mem");
 
     int fd = gst_dmabuf_memory_get_fd(mem);
-    std::cout << "fd " << fd << "\n";
+    GST_ERROR("mem %u length %u  mem_skip %d fd %d  is_dma %b", mem_idx, length,
+              (int)mem_skip, fd, gst_is_dmabuf_memory(mem));
 
     pix_buffer.planes[plane_index].bytes_used =
         get_frame_width(&frame, plane_index) *
