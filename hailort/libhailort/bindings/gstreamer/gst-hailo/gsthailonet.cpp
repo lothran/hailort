@@ -1486,12 +1486,13 @@ gst_hailonet_construct_pix_buffer(GstHailoNet *self, GstBuffer *buffer) {
     std::cout << "Mapping " << plane_index << " "
               << (void *)GST_VIDEO_FRAME_PLANE_DATA(&frame, plane_index)
               << "\n";
-    std::cout << "Planesize " << plane_index <t " "
+    std::cout << "Planesize " << plane_index << " "
               << pix_buffer.planes[plane_index].bytes_used << "\n";
 
     std::cout << "Bytes Used " << plane_index << " "
               << get_frame_width(&frame, plane_index) *
-                     GST_VIDEO_INFO_COMP_HEIGHT(&frame.info, plane_index);
+                     GST_VIDEO_INFO_COMP_HEIGHT(&frame.info, plane_index)
+              << "\n";
     pix_buffer.planes[plane_index].bytes_used =
         get_frame_width(&frame, plane_index) *
         GST_VIDEO_INFO_COMP_HEIGHT(&frame.info, plane_index);
