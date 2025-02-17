@@ -23,6 +23,7 @@
 #include "hailo/hailort_common.hpp"
 #include "hailo/hailort_defaults.hpp"
 #include "tensor_meta.hpp"
+#include <iostream>
 
 #include <algorithm>
 #include <unordered_map>
