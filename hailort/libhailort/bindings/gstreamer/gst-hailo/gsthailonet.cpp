@@ -1480,27 +1480,34 @@ gst_hailonet_construct_pix_buffer(GstHailoNet *self, GstBuffer *buffer) {
   hailo_pix_buffer_t pix_buffer = {};
   pix_buffer.index = 0;
   pix_buffer.number_of_planes = GST_VIDEO_INFO_N_PLANES(&frame.info);
-  pix_buffer.memory_type = HAILO_PIX_BUFFER_MEMORY_TYPE_USERPTR;
+  auto finfo = &self->impl->input_frame_info;
+
+  pix_buffer.memory_type = HAILO_PIX_BUFFER_MEMORY_TYPE_DMABUF;
 
   for (uint32_t plane_index = 0; plane_index < pix_buffer.number_of_planes;
        plane_index++) {
-    std::cout << "Mapping " << plane_index << " "
-              << (void *)GST_VIDEO_FRAME_PLANE_DATA(&frame, plane_index)
-              << "\n";
-    std::cout << "Planesize " << plane_index << " "
-              << pix_buffer.planes[plane_index].bytes_used << "\n";
+    int plane_size = get_frame_width(&frame, plane_index) *
+                     GST_VIDEO_INFO_COMP_HEIGHT(&frame.info, plane_index);
+    guint mem_idx = 0;
+    guint length = 0;
+    gsize mem_skip = 0;
 
-    std::cout << "Bytes Used " << plane_index << " "
-              << get_frame_width(&frame, plane_index) *
-                     GST_VIDEO_INFO_COMP_HEIGHT(&frame.info, plane_index)
-              << "\n";
+    assert(gst_buffer_find_memory(buffer, finfo->offset[plane_size], plane_size,
+                                  &mem_idx, &length, &mem_skip));
+    std::cout << "mem_skip " << mem_skip << " length " << length << " idx"
+              << mem_idx << "\n";
+    auto mem = gst_buffer_peek_memory(buffer, mem_idx);
+    std::cout << "is dma " << gst_is_dmabuf_memory(mem) << "\n";
+
+    int fd = gst_dmabuf_memory_get_fd(mem);
+    std::cout << "fd " << fd << "\n";
+
     pix_buffer.planes[plane_index].bytes_used =
         get_frame_width(&frame, plane_index) *
         GST_VIDEO_INFO_COMP_HEIGHT(&frame.info, plane_index);
     pix_buffer.planes[plane_index].plane_size =
         pix_buffer.planes[plane_index].bytes_used;
-    pix_buffer.planes[plane_index].user_ptr =
-        GST_VIDEO_FRAME_PLANE_DATA(&frame, plane_index);
+    pix_buffer.planes[plane_index].fd = fd;
   }
 
   gst_video_frame_unmap(&frame);
