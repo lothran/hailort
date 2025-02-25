@@ -1235,9 +1235,12 @@ static bool try_construct_dma_pix_buffer(GstHailoNet *self,GstBuffer* buffer,hai
   }
   pix_buffer->index = 0;
   pix_buffer->number_of_planes = GST_VIDEO_INFO_N_PLANES(&self->impl->input_frame_info);
+  assert(pix_buffer);
+  assert(pix_buffer->number_of_planes>=1);
+  assert(pix_buffer->number_of_planes<=MAX_NUMBER_OF_PLANES);
   pix_buffer->memory_type = HAILO_PIX_BUFFER_MEMORY_TYPE_DMABUF;
 
-  GST_ERROR("trying to create pixmap from dma");
+  GST_DEBUG("trying to create pixmap from dma");
 
 
   for (uint32_t plane_index = 0; plane_index < pix_buffer->number_of_planes;
@@ -1267,7 +1270,6 @@ static bool try_construct_dma_pix_buffer(GstHailoNet *self,GstBuffer* buffer,hai
       }
       int fd = gst_dmabuf_memory_get_fd(mem);
       if(fd<0){
-
         GST_ERROR("memory is no dma buf");
         self->impl->failed_dma = true;
         return false;
@@ -1281,7 +1283,6 @@ static bool try_construct_dma_pix_buffer(GstHailoNet *self,GstBuffer* buffer,hai
       pix_buffer->planes[plane_index].plane_size =
           pix_buffer->planes[plane_index].bytes_used;
       pix_buffer->planes[plane_index].fd = fd;
-      GST_ERROR("DMA %i,%i,%i",(int)pix_buffer->planes[plane_index].bytes_used,(int)pix_buffer->planes[plane_index].plane_size,(int)pix_buffer->planes[plane_index].fd);
   }
   return true;
 
