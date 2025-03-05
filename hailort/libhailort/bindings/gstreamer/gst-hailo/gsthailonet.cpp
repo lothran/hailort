@@ -1206,15 +1206,103 @@ uint32_t get_frame_width(const GstVideoFrame *frame, uint32_t plane_index)
         return GST_VIDEO_INFO_PLANE_STRIDE(&(frame->info), plane_index);
     }
 }
+uint32_t get_frame_width(const GstVideoInfo *frame, uint32_t plane_index)
+{
+    switch (GST_VIDEO_INFO_FORMAT(frame)) {
+    case GST_VIDEO_FORMAT_NV12:
+    case GST_VIDEO_FORMAT_NV21:
+    case GST_VIDEO_FORMAT_I420:
+        /* On multi-planar formats, GStreamer can add padding to plane's width without any way to know the padding size,
+            so we use the original width set by the caps */
+        return (uint32_t)GST_VIDEO_INFO_WIDTH(frame);
+    default:
+        return (uint32_t)GST_VIDEO_INFO_PLANE_STRIDE(frame, plane_index);
+    }
+}
+static bool try_construct_dma_pix_buffer(GstHailoNet *self,GstBuffer* buffer,hailo_pix_buffer_t* pix_buffer){
+  GstVideoInfo* finfo = &self->impl->input_frame_info;
+  switch(GST_VIDEO_INFO_FORMAT(finfo)){
+    case GST_VIDEO_FORMAT_RGBA:
+      break;
+    case GST_VIDEO_FORMAT_NV12://only works if one fd per plane
+      break;
+    default:
+      return false;
+
+  }
+  if(self->impl->failed_dma){
+    return false;
+  }
+  pix_buffer->index = 0;
+  pix_buffer->number_of_planes = GST_VIDEO_INFO_N_PLANES(&self->impl->input_frame_info);
+  assert(pix_buffer);
+  assert(pix_buffer->number_of_planes>=1);
+  assert(pix_buffer->number_of_planes<=MAX_NUMBER_OF_PLANES);
+  pix_buffer->memory_type = HAILO_PIX_BUFFER_MEMORY_TYPE_DMABUF;
+
+  GST_DEBUG("trying to create pixmap from dma");
+
+
+  for (uint32_t plane_index = 0; plane_index < pix_buffer->number_of_planes;
+         plane_index++) {
+      uint32_t plane_size = get_frame_width(finfo, plane_index) *
+                       (uint32_t)GST_VIDEO_INFO_COMP_HEIGHT(finfo, plane_index);
+
+      guint mem_idx = 0;
+      guint length = 0;
+      gsize mem_skip = 0;
+
+      gst_buffer_find_memory(buffer, finfo->offset[plane_index], plane_size,
+                             &mem_idx, &length, &mem_skip);
+      auto mem = gst_buffer_peek_memory(buffer, mem_idx);
+      if(!mem ){
+        GST_ERROR("cant find memory for dma buf");
+        self->impl->failed_dma = true;
+        return false;
+      }
+      if(!gst_is_dmabuf_memory(mem)){
+        GST_ERROR("memory is no dma buf");
+        self->impl->failed_dma = true;
+        return false;
+      }
+      if(mem_skip>0){
+        GST_WARNING("waring hailo need memory layout without offsets, but buffer has %i offset",(int)mem_skip);
+      }
+      int fd = gst_dmabuf_memory_get_fd(mem);
+      if(fd<0){
+        GST_ERROR("memory is no dma buf");
+        self->impl->failed_dma = true;
+        return false;
+
+      }
+
+
+      pix_buffer->planes[plane_index].bytes_used =
+          get_frame_width(finfo, plane_index) *
+          (uint32_t)GST_VIDEO_INFO_COMP_HEIGHT(finfo, plane_index);
+      pix_buffer->planes[plane_index].plane_size =
+          pix_buffer->planes[plane_index].bytes_used;
+      pix_buffer->planes[plane_index].fd = fd;
+  }
+  return true;
+
+
+
+}
 
 static Expected<hailo_pix_buffer_t> gst_hailonet_construct_pix_buffer(GstHailoNet *self, GstBuffer *buffer)
 {
+    
     GstVideoFrame frame;
+    hailo_pix_buffer_t pix_buffer = {};
+    if (try_construct_dma_pix_buffer(self,buffer,&pix_buffer)){
+      return pix_buffer;
+    }
     auto result = gst_video_frame_map(&frame, &self->impl->input_frame_info, buffer,
         static_cast<GstMapFlags>(GST_MAP_READ | GST_VIDEO_FRAME_MAP_FLAG_NO_REF));
     CHECK_AS_EXPECTED(result,HAILO_INTERNAL_FAILURE, "gst_video_frame_map failed!");
 
-    hailo_pix_buffer_t pix_buffer = {};
+
     pix_buffer.index = 0;
     pix_buffer.number_of_planes = GST_VIDEO_INFO_N_PLANES(&frame.info);
     pix_buffer.memory_type = HAILO_PIX_BUFFER_MEMORY_TYPE_USERPTR;
@@ -1485,6 +1573,7 @@ Expected<std::unique_ptr<HailoNetImpl>> HailoNetImpl::create()
 {
     auto ptr = make_unique_nothrow<HailoNetImpl>();
     CHECK_NOT_NULL_AS_EXPECTED(ptr, HAILO_OUT_OF_HOST_MEMORY);
+    ptr->failed_dma = false;
 
     return ptr;
 }
