@@ -1271,6 +1271,8 @@ static bool try_construct_dma_pix_buffer(GstHailoNet *self,GstBuffer* buffer,hai
       }
       if(mem_skip>0){
         GST_WARNING("hailonet cannot use dma buffer because one fd per plane is required");
+        self->impl->failed_dma =true;
+        return false;
       }
       int fd = gst_dmabuf_memory_get_fd(mem);
       if(fd<0){
