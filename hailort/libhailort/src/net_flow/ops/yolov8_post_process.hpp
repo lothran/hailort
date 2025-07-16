@@ -15,6 +15,7 @@
 #include "net_flow/ops/softmax_post_process.hpp"
 #include "net_flow/ops_metadata/yolov8_op_metadata.hpp"
 #include "net_flow/ops/softmax_post_process.hpp"
+#define unlikely(x)     __builtin_expect(!!(x), 0)
 
 namespace hailort
 {
@@ -133,6 +134,7 @@ private:
 
         SrcType *reg_data = (SrcType*)reg_buffer.data();
         SrcType *cls_data = (SrcType*)cls_buffer.data();
+        SrcType th = SrcType(float(nms_config.nms_score_th)/cls_quant_info.qp_scale+cls_quant_info.qp_zp);
 
         for (uint32_t row = 0; row < cls_shape.height; row++) {
             for (uint32_t col = 0; col < cls_shape.width; col++) {
@@ -154,18 +156,18 @@ private:
                 }
                 else {
                     // No optimization - it's possible that a specific bbox will hold more then 1 class
-                    for (uint32_t curr_class_idx = 0; curr_class_idx < nms_config.number_of_classes; curr_class_idx++) {
-                        auto class_entry_idx = cls_idx + (curr_class_idx * cls_padded_shape.width);
-                        auto class_confidence = Quantization::dequantize_output<DstType, SrcType>(
-                            cls_data[class_entry_idx], cls_quant_info);
-                        if (class_confidence >= nms_config.nms_score_th) {
+                    for (uint32_t i = cls_idx;i < (nms_config.number_of_classes*cls_padded_shape.width)+cls_idx;i+=cls_padded_shape.width) {
+                         if (unlikely(cls_data[i] >= th)) {
                             // If passes threshold - get the relevant bbox and add this detection
-                            assert(contains(m_d_matrix, layers_names.reg));
+                            auto real_class_entry = (i-cls_idx)/cls_padded_shape.width;
                             auto &d_matrix = m_d_matrix.at(layers_names.reg);
+                            auto class_confidence =
+                                Quantization::dequantize_output<DstType, SrcType>(
+                                    cls_data[i], cls_quant_info);
                             auto bbox = get_bbox<DstType, SrcType>(row, col, stride, reg_padded_shape, reg_shape, reg_quant_info,
                                                                     (SrcType*)reg_data, d_matrix, class_confidence);
-                            m_detections.emplace_back(DetectionBbox(bbox, curr_class_idx));
-                            m_classes_detections_count[curr_class_idx]++;
+                            m_detections.emplace_back(DetectionBbox(bbox, real_class_entry));
+                            m_classes_detections_count[real_class_entry]++;
                         }
                     }
                 }

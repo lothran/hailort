@@ -18,10 +18,14 @@
  * Boston, MA 02110-1301, USA.
  */
 #include "gsthailonet.hpp"
+#include "gst/gstinfo.h"
+#include "gst/gstquery.h"
+#include "gst/video/video-info.h"
 #include "tensor_meta.hpp"
 #include "hailo/buffer.hpp"
 #include "hailo/hailort_common.hpp"
 #include "hailo/hailort_defaults.hpp"
+#include "segmented_pool.hpp"
 
 #include <algorithm>
 #include <unordered_map>
@@ -1266,7 +1270,9 @@ static bool try_construct_dma_pix_buffer(GstHailoNet *self,GstBuffer* buffer,hai
         return false;
       }
       if(mem_skip>0){
-        GST_WARNING("waring hailo need memory layout without offsets, but buffer has %i offset",(int)mem_skip);
+        GST_WARNING("hailonet cannot use dma buffer because one fd per plane is required");
+        self->impl->failed_dma =true;
+        return false;
       }
       int fd = gst_dmabuf_memory_get_fd(mem);
       if(fd<0){
@@ -1533,6 +1539,13 @@ static gboolean gst_hailonet_handle_sink_query(GstPad * pad, GstObject * parent,
     {
         // We implement this to make sure buffers are contiguous in memory
         gst_query_add_allocation_meta(query, GST_VIDEO_META_API_TYPE, NULL);
+        GstBufferPool* pool = gst_custom_video_buffer_pool_new();
+        GstCaps *caps = gst_hailonet_get_caps(self);
+        GstVideoInfo info;
+        gst_video_info_from_caps(&info, caps);
+        gst_caps_unref(caps);
+        gst_query_add_allocation_pool(query,pool,info.size,2,8);
+        GST_INFO("adding custom pool");
         return gst_pad_query_default(pad, parent, query);
     }
     default:
