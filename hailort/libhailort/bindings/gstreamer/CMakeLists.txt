@@ -21,7 +21,6 @@ set(GSTHAILO_SOURCES
     gst-hailo/gsthailo_allocator.cpp
     gst-hailo/gsthailodevicestats.cpp
     gst-hailo/common.cpp
-    gst-hailo/segmented_pool.cpp
     gst-hailo/network_group_handle.cpp
     gst-hailo/metadata/hailo_buffer_flag_meta.cpp
     gst-hailo/metadata/tensor_meta.cpp

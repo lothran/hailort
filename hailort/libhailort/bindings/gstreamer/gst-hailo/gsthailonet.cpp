@@ -25,7 +25,6 @@
 #include "hailo/buffer.hpp"
 #include "hailo/hailort_common.hpp"
 #include "hailo/hailort_defaults.hpp"
-#include "segmented_pool.hpp"
 
 #include <algorithm>
 #include <unordered_map>
@@ -1537,15 +1536,7 @@ static gboolean gst_hailonet_handle_sink_query(GstPad * pad, GstObject * parent,
     }
     case GST_QUERY_ALLOCATION:
     {
-        // We implement this to make sure buffers are contiguous in memory
         gst_query_add_allocation_meta(query, GST_VIDEO_META_API_TYPE, NULL);
-        GstBufferPool* pool = gst_custom_video_buffer_pool_new();
-        GstCaps *caps = gst_hailonet_get_caps(self);
-        GstVideoInfo info;
-        gst_video_info_from_caps(&info, caps);
-        gst_caps_unref(caps);
-        gst_query_add_allocation_pool(query,pool,info.size,2,8);
-        GST_INFO("adding custom pool");
         return gst_pad_query_default(pad, parent, query);
     }
     default:
